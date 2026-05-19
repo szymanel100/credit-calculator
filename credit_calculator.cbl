@@ -4,9 +4,12 @@ PROGRAM-ID. LOAN-CALCULATOR.
 DATA DIVISION.
 WORKING-STORAGE SECTION.
 77  LOAN-AMOUNT            PIC 9(8)V99 VALUE 0.
-77  MONTHLY-INTEREST       PIC 9V9999 VALUE 0.
+77  ANNUAL-INTEREST        PIC 9(2)V9999 VALUE 0. 
+77  MONTHLY-INTEREST       PIC 9V999999 VALUE 0.
 77  MONTHS                 PIC 9(3) VALUE 0.
+77  MONTHS-LEFT            PIC 9(3) VALUE 0.
 77  MONTHLY-PAYMENT        PIC 9(7)V99 VALUE 0.
+77  PRINCIPAL-PAYMENT      PIC 9(7)V99 VALUE 0.
 77  MONTH                  PIC 9(3) VALUE 1.
 77  BALANCE                PIC S9(8)V99 VALUE 0.
 77  INTEREST               PIC S9(7)V99 VALUE 0.
@@ -23,20 +26,20 @@ WORKING-STORAGE SECTION.
 77  DUMMY-WAIT             PIC X VALUE SPACE.
 
 PROCEDURE DIVISION.
-    DISPLAY "--- KALKULATOR KREDYTOWY ---".
+    DISPLAY "--- KALKULATOR RAT MALEJACYCH ---".
     
     DISPLAY " ". 
     DISPLAY "Podaj kwote kredytu: " WITH NO ADVANCING.
     ACCEPT LOAN-AMOUNT.
     
-    DISPLAY "Podaj liczbe miesiecy: " WITH NO ADVANCING.
+    DISPLAY "Podaj liczbe miesiecy (np. 360 dla 30 lat): " WITH NO ADVANCING.
     ACCEPT MONTHS.
     
-    DISPLAY "Podaj oprocentowanie miesieczne (np. 0.5): " WITH NO ADVANCING.
-    ACCEPT MONTHLY-INTEREST.
-    
-    DISPLAY "Podaj miesieczna rate: " WITH NO ADVANCING.
-    ACCEPT MONTHLY-PAYMENT.
+    DISPLAY "Podaj oprocentowanie ROCZNE (np. 5.75): " WITH NO ADVANCING.
+    ACCEPT ANNUAL-INTEREST.
+
+    *> Obliczenie stopy miesięcznej
+    COMPUTE MONTHLY-INTEREST = ANNUAL-INTEREST / 12.
 
     DISPLAY "Miesiac 1 nadplaty (0=brak): " WITH NO ADVANCING.
     ACCEPT OVERPAYMENT-MONTH1.
@@ -72,23 +75,34 @@ PROCEDURE DIVISION.
             MOVE 0 TO OVERPAYMENT
         END-IF END-IF END-IF
 
+        *> 1. Oblicz ile miesięcy zostało do końca planowanej spłaty
+        COMPUTE MONTHS-LEFT = MONTHS - MONTH + 1
+
+        *> 2. Oblicz stałą część kapitałową na dany miesiąc
+        COMPUTE PRINCIPAL-PAYMENT = BALANCE / MONTHS-LEFT
+
+        *> 3. Oblicz bieżące odsetki od aktualnego salda zadłużenia
         COMPUTE INTEREST = BALANCE * (MONTHLY-INTEREST / 100)
         ADD INTEREST TO TOTAL-INTEREST
         
-        *> Obliczamy całkowitą kwotę wpłaconą w tym miesiącu
+        *> 4. Rata podstawowa w tym miesiącu (kapitał + odsetki)
+        COMPUTE MONTHLY-PAYMENT = PRINCIPAL-PAYMENT + INTEREST
+        
+        *> 5. Całkowity wydatek użytkownika w tym miesiącu (wraz z nadpłatą)
         COMPUTE WS-CURRENT-PAYMENT = MONTHLY-PAYMENT + OVERPAYMENT
         
-        SUBTRACT MONTHLY-PAYMENT FROM BALANCE
-        SUBTRACT OVERPAYMENT FROM BALANCE
+        *> 6. Aktualizacja salda: odejmujemy ratę kapitałową oraz nadpłatę
+        COMPUTE BALANCE = BALANCE - PRINCIPAL-PAYMENT - OVERPAYMENT
 
+        *> 7. Korekta dla ostatniej raty (lub wcześniejszego zamknięcia długu przez nadpłaty)
         IF BALANCE < 0
-            *> Korekta ostatniej raty, jeśli saldo spadło poniżej zera
             ADD BALANCE TO WS-CURRENT-PAYMENT
             MOVE 0 TO BALANCE
         END-IF
 
         DISPLAY "Miesiac: " MONTH 
-                " | Wplata: " WS-CURRENT-PAYMENT
+                " | Wplata calk: " WS-CURRENT-PAYMENT
+                " | Rata bez nadp.: " MONTHLY-PAYMENT
                 " | Odsetki: " INTEREST
                 " | Saldo: " BALANCE
         
